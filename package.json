@@ -1,0 +1,9 @@
+{
+  "name": "decoupeur-pdf-audio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Découpeur de PDF avec extraction de texte et lecture audio",
+  "dependencies": {
+    "msedge-tts": "^2.0.7"
+  }
+}

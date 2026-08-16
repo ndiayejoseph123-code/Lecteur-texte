@@ -214,7 +214,8 @@
     margin-bottom: 14px;
   }
   .voice-field label{ display:block; font-size: 0.85rem; color: var(--ink-soft); margin-bottom: 6px; }
-  .voice-field input[type=text]{
+  .voice-field input[type=text],
+  .voice-field select{
     width:100%;
     padding: 12px;
     font-size: 0.95rem;
@@ -279,9 +280,25 @@
     </div>
 
     <div class="voice-field">
-      <label for="voiceIdInput">Voix Mistral (optionnel)</label>
-      <input type="text" id="voiceIdInput" placeholder="laisser vide pour la voix par défaut">
-      <div class="hint">Identifiant d'une voix Mistral (preset ou clonée). Trouvable dans Mistral AI Studio. La clé API Mistral est configurée côté serveur (variable d'environnement Netlify), pas ici.</div>
+      <label for="voiceIdInput">Voix (gratuite, Microsoft Edge)</label>
+      <select id="voiceIdInput">
+        <optgroup label="France">
+          <option value="fr-FR-DeniseNeural">Denise (femme, FR)</option>
+          <option value="fr-FR-HenriNeural">Henri (homme, FR)</option>
+          <option value="fr-FR-EloiseNeural">Éloïse (enfant, FR)</option>
+        </optgroup>
+        <optgroup label="Canada">
+          <option value="fr-CA-SylvieNeural">Sylvie (femme, CA)</option>
+          <option value="fr-CA-JeanNeural">Jean (homme, CA)</option>
+        </optgroup>
+        <optgroup label="Belgique / Suisse">
+          <option value="fr-BE-CharlineNeural">Charline (femme, BE)</option>
+          <option value="fr-BE-GerardNeural">Gérard (homme, BE)</option>
+          <option value="fr-CH-ArianeNeural">Ariane (femme, CH)</option>
+          <option value="fr-CH-FabriceNeural">Fabrice (homme, CH)</option>
+        </optgroup>
+      </select>
+      <div class="hint">Voix neuronale Microsoft (identique à « Lire à voix haute » d'Edge). 100&nbsp;% gratuit, aucune clé API à configurer. Service non officiel : peut occasionnellement être indisponible.</div>
     </div>
 
     <div id="partsList"></div>
@@ -692,9 +709,8 @@
   // --- Lecture à voix haute (via fonction Netlify -> API Mistral) ---
 
   const voiceIdInput = document.getElementById('voiceIdInput');
-  const TTS_ENDPOINT = '/.netlify/functions/tts';
-  const TTS_CHARS_PER_CHUNK = 900;
-  const TTS_PRICE_PER_1000_CHARS = 0.016; // USD, tarif Voxtral TTS Mistral
+  const TTS_ENDPOINT = '/.netlify/functions/tts-free';
+  const TTS_CHARS_PER_CHUNK = 1500;
 
   function chunkText(text, maxChars){
     const clean = text.replace(/\s+/g, ' ').trim();
@@ -774,13 +790,12 @@
     }
 
     const charCount = part.text.length;
-    const estCost = (charCount / 1000 * TTS_PRICE_PER_1000_CHARS).toFixed(3);
     const chunks = chunkText(part.text, TTS_CHARS_PER_CHUNK);
 
     const confirmed = window.confirm(
       `Générer l'audio pour "${part.name}" ?\n\n` +
-      `${charCount} caractères, ${chunks.length} requête(s) à l'API Mistral.\n` +
-      `Coût estimé : environ ${estCost} $.\n\n` +
+      `${charCount} caractères, ${chunks.length} requête(s) audio (gratuit).\n` +
+      `Cela peut prendre un moment selon la longueur.\n\n` +
       `Continuer ?`
     );
     if (!confirmed) return;
@@ -797,8 +812,7 @@
       for (let i = 0; i < chunks.length; i++){
         els.status.textContent = `Génération audio… segment ${i + 1} / ${chunks.length}`;
 
-        const payload = { text: chunks[i], format: 'mp3' };
-        if (voiceId) payload.voice_id = voiceId;
+        const payload = { text: chunks[i], voice: voiceId };
 
         const resp = await fetch(TTS_ENDPOINT, {
           method: 'POST',
@@ -814,12 +828,9 @@
             ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error)))
             : null;
           if (resp.status === 404){
-            throw new Error("Fonction audio introuvable. Ce site n'a probablement pas été déployé avec le dossier netlify/functions, ou la clé MISTRAL_API_KEY n'est pas configurée.");
+            throw new Error("Fonction audio introuvable. Vérifiez que le dossier netlify/functions et package.json ont bien été déployés sur Netlify.");
           }
-          if (resp.status === 403){
-            throw new Error("Requête refusée par la modération Mistral (contenu ou clé API invalide).");
-          }
-          throw new Error(serverMsg || `Erreur serveur (code ${resp.status}).`);
+          throw new Error(serverMsg || `Erreur serveur (code ${resp.status}). Le service gratuit est peut-être temporairement indisponible, réessayez dans un instant.`);
         }
 
         if (!data || !data.audio_data){
