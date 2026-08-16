@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Découpeur PDF</title>
+
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+  :root{
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --ink: #1c2530;
+    --ink-soft: #5b6772;
+    --accent: #2f6fed;
+    --accent-dark: #1f4fc4;
+    --accent-soft: #e7eefe;
+    --ok: #1e8e5a;
+    --ok-soft: #e5f6ee;
+    --err: #c73333;
+    --err-soft: #fdeaea;
+    --border: #e1e6eb;
+    --radius: 14px;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 20px 14px 60px;
+    min-height: 100vh;
+  }
+  .wrap{ max-width: 560px; margin: 0 auto; }
+
+  header{ text-align:center; margin-bottom: 20px; }
+  header h1{ font-size: 1.7rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+  header p{ margin:0; color: var(--ink-soft); font-size: 0.95rem; line-height:1.4; padding: 0 6px; }
+
+  .card{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(20,30,50,0.04);
+  }
+
+  .btn{
+    display:block;
+    width:100%;
+    border:none;
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor:pointer;
+    text-align:center;
+    transition: transform .05s ease, opacity .15s ease, background .15s ease;
+    touch-action: manipulation;
+  }
+  .btn:active{ transform: scale(0.98); }
+  .btn:disabled{ opacity: 0.5; cursor:not-allowed; transform:none; }
+
+  .btn-primary{ background: var(--accent); color:#fff; }
+  .btn-primary:hover{ background: var(--accent-dark); }
+  .btn-secondary{ background: var(--accent-soft); color: var(--accent-dark); }
+  .btn-ghost{ background: transparent; color: var(--err); border: 1px solid var(--err-soft); }
+  .btn-small{ padding: 11px 14px; font-size: 0.92rem; border-radius: 10px; }
+
+  input[type=file]{ display:none; }
+
+  .file-info{ margin-top: 14px; }
+  .file-info .row{
+    display:flex; justify-content:space-between; gap:10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 0.94rem;
+  }
+  .file-info .row:last-child{ border-bottom:none; }
+  .file-info .label{ color: var(--ink-soft); }
+  .file-info .value{ font-weight: 600; text-align:right; word-break: break-word; max-width: 65%; }
+
+  .field{ margin-top: 16px; }
+  .field label{ display:block; font-size: 0.9rem; color: var(--ink-soft); margin-bottom: 6px; }
+  .field input[type=number]{
+    width:100%;
+    padding: 14px;
+    font-size: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fafbfc;
+    color: var(--ink);
+  }
+  .field input[type=number]:focus{ outline: 2px solid var(--accent); border-color: var(--accent); }
+  .field .hint{ font-size: 0.8rem; color: var(--ink-soft); margin-top: 6px; }
+
+  .progress-wrap{ margin-top: 14px; display:none; }
+  .progress-wrap.show{ display:block; }
+  .progress-track{
+    background: var(--border);
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+  }
+  .progress-fill{
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width .2s ease;
+  }
+  .progress-text{ font-size: 0.85rem; color: var(--ink-soft); margin-top: 8px; text-align:center; }
+
+  .error-box{
+    background: var(--err-soft);
+    color: var(--err);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.92rem;
+    margin-top: 14px;
+    line-height: 1.4;
+    display:none;
+  }
+  .error-box.show{ display:block; }
+
+  .success-box{
+    background: var(--ok-soft);
+    color: var(--ok);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    margin-bottom: 14px;
+    display:none;
+  }
+  .success-box.show{ display:block; }
+
+  .parts-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom: 12px;
+  }
+  .parts-header h2{ font-size: 1.05rem; margin:0; }
+
+  .part-item{
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .part-item .meta .name{ font-weight: 600; font-size: 0.95rem; word-break: break-word; }
+  .part-item .meta .sub{ font-size: 0.8rem; color: var(--ink-soft); margin-top: 2px; }
+  .part-item .meta .warn{ font-size: 0.78rem; color: var(--err); margin-top: 4px; }
+  .part-item .dl-row{
+    display:flex; gap: 8px; margin-top: 10px;
+  }
+  .part-item a.download-link{
+    flex: 1;
+    text-align:center;
+    background: var(--accent);
+    color:#fff;
+    text-decoration:none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 10px;
+    border-radius: 9px;
+  }
+  .part-item a.download-link:active{ background: var(--accent-dark); }
+  .part-item a.download-link.txt-link{
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+  }
+  .part-item a.download-link.disabled{
+    background: var(--border);
+    color: var(--ink-soft);
+    pointer-events: none;
+  }
+
+  .audio-row{
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .btn-audio{
+    width: 100%;
+    background: #f0f4ff;
+    color: var(--accent-dark);
+    border: 1px solid var(--accent-soft);
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-audio:disabled{ opacity: 0.6; }
+  .audio-status{
+    display:none;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    margin-top: 8px;
+  }
+  .audio-player{
+    display:none;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .audio-download{
+    display:none;
+    margin-top: 8px;
+  }
+
+  .voice-field{
+    margin-bottom: 14px;
+  }
+  .voice-field label{ display:block; font-size: 0.85rem; color: var(--ink-soft); margin-bottom: 6px; }
+  .voice-field input[type=text],
+  .voice-field select{
+    width:100%;
+    padding: 12px;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fafbfc;
+    color: var(--ink);
+  }
+  .voice-field .hint{ font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height:1.4; }
+  .voice-field .hint a{ color: var(--accent); }
+
+  .actions-row{ display:flex; gap: 10px; margin-top: 14px; }
+  .actions-row .btn{ margin:0; }
+
+  .hidden{ display:none !important; }
+
+  footer{ text-align:center; color: var(--ink-soft); font-size: 0.78rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>📄 Découpeur PDF</h1>
+    <p>Découpez vos gros PDF en parties de 50 pages maximum. Vos fichiers restent sur votre appareil.</p>
+  </header>
+
+  <!-- Sélection du fichier -->
+  <div class="card">
+    <button class="btn btn-primary" id="selectBtn">Sélectionner un PDF</button>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf">
+
+    <div class="file-info hidden" id="fileInfo">
+      <div class="row"><span class="label">Nom</span><span class="value" id="fileName">—</span></div>
+      <div class="row"><span class="label">Taille</span><span class="value" id="fileSize">—</span></div>
+      <div class="row"><span class="label">Pages</span><span class="value" id="filePages">—</span></div>
+    </div>
+
+    <div class="field hidden" id="maxPagesField">
+      <label for="maxPages">Nombre maximal de pages par partie</label>
+      <input type="number" id="maxPages" value="50" min="1" step="1" inputmode="numeric">
+      <div class="hint" id="splitPreview"></div>
+    </div>
+
+    <div class="field hidden" id="splitBtnWrap">
+      <button class="btn btn-primary" id="splitBtn" style="margin-top:6px;">Découper le PDF</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">Préparation…</div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <!-- Résultats -->
+  <div class="card hidden" id="resultsCard">
+    <div class="success-box" id="successBox"></div>
+    <div class="parts-header">
+      <h2>Parties générées</h2>
+    </div>
+
+    <div class="voice-field">
+      <label for="voiceIdInput">Voix (gratuite, Microsoft Edge)</label>
+      <select id="voiceIdInput">
+        <optgroup label="France">
+          <option value="fr-FR-DeniseNeural">Denise (femme, FR)</option>
+          <option value="fr-FR-HenriNeural">Henri (homme, FR)</option>
+          <option value="fr-FR-EloiseNeural">Éloïse (enfant, FR)</option>
+        </optgroup>
+        <optgroup label="Canada">
+          <option value="fr-CA-SylvieNeural">Sylvie (femme, CA)</option>
+          <option value="fr-CA-JeanNeural">Jean (homme, CA)</option>
+        </optgroup>
+        <optgroup label="Belgique / Suisse">
+          <option value="fr-BE-CharlineNeural">Charline (femme, BE)</option>
+          <option value="fr-BE-GerardNeural">Gérard (homme, BE)</option>
+          <option value="fr-CH-ArianeNeural">Ariane (femme, CH)</option>
+          <option value="fr-CH-FabriceNeural">Fabrice (homme, CH)</option>
+        </optgroup>
+      </select>
+      <div class="hint">Voix neuronale Microsoft (identique à « Lire à voix haute » d'Edge). 100&nbsp;% gratuit, aucune clé API à configurer. Service non officiel : peut occasionnellement être indisponible.</div>
+    </div>
+
+    <div id="partsList"></div>
+
+    <div class="actions-row">
+      <button class="btn btn-secondary btn-small" id="downloadAllBtn">Télécharger toutes les parties (.zip)</button>
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-ghost btn-small" id="clearBtn">Tout effacer</button>
+    </div>
+  </div>
+
+  <footer>Traitement 100&nbsp;% local — aucun fichier envoyé sur internet.</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const { PDFDocument, PDFName } = PDFLib;
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // --- Éléments DOM ---
+  const selectBtn = document.getElementById('selectBtn');
+  const fileInput = document.getElementById('fileInput');
+  const fileInfo = document.getElementById('fileInfo');
+  const fileNameEl = document.getElementById('fileName');
+  const fileSizeEl = document.getElementById('fileSize');
+  const filePagesEl = document.getElementById('filePages');
+  const maxPagesField = document.getElementById('maxPagesField');
+  const maxPagesInput = document.getElementById('maxPages');
+  const splitPreview = document.getElementById('splitPreview');
+  const splitBtnWrap = document.getElementById('splitBtnWrap');
+  const splitBtn = document.getElementById('splitBtn');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  const errorBox = document.getElementById('errorBox');
+  const resultsCard = document.getElementById('resultsCard');
+  const successBox = document.getElementById('successBox');
+  const partsList = document.getElementById('partsList');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  // --- État ---
+  let currentFile = null;
+  let currentArrayBuffer = null;
+  let currentPageCount = 0;
+  let currentBaseName = 'document';
+  let generatedParts = []; // { name, blob, url, pages, size }
+
+  // --- Utilitaires ---
+  function formatSize(bytes){
+    if (bytes === 0) return '0 Ko';
+    const units = ['octets','Ko','Mo','Go'];
+    let i = 0;
+    let val = bytes;
+    while (val >= 1024 && i < units.length - 1){
+      val /= 1024;
+      i++;
+    }
+    return (i === 0 ? val : val.toFixed(2)) + ' ' + units[i];
+  }
+
+  function sanitizeFileName(name){
+    return name
+      .replace(/\.pdf$/i, '')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .trim() || 'document';
+  }
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function clearError(){
+    errorBox.textContent = '';
+    errorBox.classList.remove('show');
+  }
+
+  function resetFileUI(){
+    fileInfo.classList.add('hidden');
+    maxPagesField.classList.add('hidden');
+    splitBtnWrap.classList.add('hidden');
+    progressWrap.classList.remove('show');
+    resultsCard.classList.add('hidden');
+    clearError();
+  }
+
+  function updateSplitPreview(){
+    const maxP = parseInt(maxPagesInput.value, 10);
+    if (!currentPageCount || !maxP || maxP < 1){
+      splitPreview.textContent = '';
+      return;
+    }
+    const parts = Math.ceil(currentPageCount / maxP);
+    splitPreview.textContent = parts === 1
+      ? `Le PDF tient déjà dans une seule partie (${currentPageCount} pages).`
+      : `Cela créera ${parts} fichiers.`;
+  }
+
+  async function extractTextFromBytes(bytes){
+    // pdf.js a besoin de sa propre copie du buffer (il le "détache")
+    const data = new Uint8Array(bytes.slice ? bytes.slice() : bytes);
+    const loadingTask = pdfjsLib.getDocument({ data: data });
+    const pdf = await loadingTask.promise;
+    const chunks = [];
+    for (let i = 1; i <= pdf.numPages; i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      chunks.push(strings.join(' ').replace(/\s+/g, ' ').trim());
+    }
+    return chunks.join('\n\n');
+  }
+
+  // --- Sélection du fichier ---
+  selectBtn.addEventListener('click', function(){
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  function revokePartUrls(){
+    generatedParts.forEach(function(p){
+      URL.revokeObjectURL(p.url);
+      if (p.txtUrl) URL.revokeObjectURL(p.txtUrl);
+      if (p.audioUrl) URL.revokeObjectURL(p.audioUrl);
+    });
+  }
+
+  fileInput.addEventListener('change', async function(e){
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    resetFileUI();
+    revokePartUrls();
+    generatedParts = [];
+    partsList.innerHTML = '';
+
+    const nameLooksOk = /\.pdf$/i.test(file.name);
+    const typeLooksOk = file.type === 'application/pdf' || file.type === '';
+    if (!nameLooksOk && !typeLooksOk){
+      showError("Ce fichier n'est pas un PDF. Choisissez un fichier avec l'extension .pdf.");
+      return;
+    }
+
+    currentFile = file;
+    currentBaseName = sanitizeFileName(file.name);
+
+    fileNameEl.textContent = file.name;
+    fileSizeEl.textContent = formatSize(file.size);
+    filePagesEl.textContent = 'Analyse en cours…';
+    fileInfo.classList.remove('hidden');
+
+    try {
+      const buf = await file.arrayBuffer();
+      currentArrayBuffer = buf;
+
+      let pdfDoc;
+      try {
+        pdfDoc = await PDFDocument.load(buf, { ignoreEncryption: false, updateMetadata: false });
+      } catch (loadErr) {
+        const msg = (loadErr && loadErr.message) ? loadErr.message.toLowerCase() : '';
+        if (msg.indexOf('encrypt') !== -1) {
+          throw new Error('ENCRYPTED');
+        }
+        throw new Error('UNREADABLE');
+      }
+
+      const pageCount = pdfDoc.getPageCount();
+      if (!pageCount || pageCount < 1){
+        throw new Error('UNREADABLE');
+      }
+
+      currentPageCount = pageCount;
+      filePagesEl.textContent = pageCount + (pageCount > 1 ? ' pages' : ' page');
+
+      maxPagesInput.value = 50;
+      maxPagesField.classList.remove('hidden');
+      splitBtnWrap.classList.remove('hidden');
+      updateSplitPreview();
+
+    } catch (err) {
+      filePagesEl.textContent = '—';
+      if (err && err.message === 'ENCRYPTED'){
+        showError('Ce PDF est protégé par un mot de passe. Retirez la protection avant de le découper.');
+      } else if (err && err.message === 'UNREADABLE'){
+        showError("Ce fichier PDF n'a pas pu être lu. Il est peut-être corrompu ou dans un format non pris en charge.");
+      } else {
+        showError("Impossible de lire ce PDF sur cet appareil. Il est peut-être trop volumineux pour la mémoire disponible.");
+      }
+      currentArrayBuffer = null;
+      currentPageCount = 0;
+    }
+  });
+
+  maxPagesInput.addEventListener('input', updateSplitPreview);
+
+  // --- Découpage ---
+  splitBtn.addEventListener('click', async function(){
+    clearError();
+    resultsCard.classList.add('hidden');
+
+    let maxP = parseInt(maxPagesInput.value, 10);
+    if (!maxP || maxP < 1){
+      showError('Indiquez un nombre de pages par partie valide (1 ou plus).');
+      return;
+    }
+    if (!currentArrayBuffer || !currentPageCount){
+      showError('Aucun PDF valide sélectionné.');
+      return;
+    }
+
+    splitBtn.disabled = true;
+    selectBtn.disabled = true;
+    progressWrap.classList.add('show');
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Chargement du document…';
+
+    // Laisser le navigateur peindre l'UI avant le traitement lourd
+    await new Promise(r => setTimeout(r, 30));
+
+    try {
+      const srcDoc = await PDFDocument.load(currentArrayBuffer, { updateMetadata: false });
+      const totalPages = srcDoc.getPageCount();
+      const totalParts = Math.ceil(totalPages / maxP);
+      const padLength = Math.max(2, String(totalParts).length);
+
+      const results = [];
+
+      for (let i = 0; i < totalParts; i++){
+        const startPage = i * maxP;
+        const endPage = Math.min(startPage + maxP, totalPages);
+        const indices = [];
+        for (let p = startPage; p < endPage; p++) indices.push(p);
+
+        progressText.textContent = `Création de la partie ${i + 1} sur ${totalParts}…`;
+        progressFill.style.width = Math.round((i / totalParts) * 100) + '%';
+        await new Promise(r => setTimeout(r, 0));
+
+        const newDoc = await PDFDocument.create();
+        const copiedPages = await newDoc.copyPages(srcDoc, indices);
+        copiedPages.forEach(pg => newDoc.addPage(pg));
+
+        const bytes = await newDoc.save({ useObjectStreams: true });
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        const partNumber = String(i + 1).padStart(padLength, '0');
+        const partName = `${currentBaseName}_${partNumber}.pdf`;
+
+        // Extraction du texte de cette partie
+        progressText.textContent = `Extraction du texte — partie ${i + 1} sur ${totalParts}…`;
+        await new Promise(r => setTimeout(r, 0));
+
+        let text = '';
+        let textError = false;
+        try {
+          text = await extractTextFromBytes(bytes);
+        } catch (extractErr) {
+          console.error('Extraction texte échouée pour', partName, extractErr);
+          textError = true;
+        }
+
+        const txtName = `${currentBaseName}_${partNumber}.txt`;
+        const hasText = !textError && text && text.trim().length > 0;
+        const txtBlob = new Blob([hasText ? text : ''], { type: 'text/plain;charset=utf-8' });
+        const txtUrl = hasText ? URL.createObjectURL(txtBlob) : null;
+
+        results.push({
+          name: partName,
+          blob: blob,
+          url: url,
+          pages: indices.length,
+          size: blob.size,
+          txtName: txtName,
+          txtBlob: hasText ? txtBlob : null,
+          txtUrl: txtUrl,
+          hasText: hasText,
+          textError: textError,
+          text: hasText ? text : '',
+          audioBlob: null,
+          audioUrl: null,
+          audioName: null
+        });
+
+        progressFill.style.width = Math.round(((i + 1) / totalParts) * 100) + '%';
+      }
+
+      generatedParts = results;
+      progressText.textContent = 'Terminé !';
+      renderResults(totalPages, totalParts);
+
+    } catch (err) {
+      console.error(err);
+      let msg = "Une erreur est survenue pendant le découpage du PDF.";
+      if (err && err.name === 'RangeError' || (err && /memory/i.test(err.message || ''))){
+        msg = "Mémoire insuffisante pour découper ce PDF sur cet appareil. Essayez avec une valeur de pages par partie plus petite, ou fermez d'autres applications.";
+      }
+      showError(msg);
+    } finally {
+      splitBtn.disabled = false;
+      selectBtn.disabled = false;
+      setTimeout(() => { progressWrap.classList.remove('show'); }, 600);
+    }
+  });
+
+  function renderResults(totalPages, totalParts){
+    partsList.innerHTML = '';
+    successBox.textContent = `${totalPages} pages découpées en ${totalParts} partie${totalParts > 1 ? 's' : ''}.`;
+    successBox.classList.add('show');
+
+    generatedParts.forEach(function(part){
+      const item = document.createElement('div');
+      item.className = 'part-item';
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'name';
+      nameEl.textContent = part.name;
+      const subEl = document.createElement('div');
+      subEl.className = 'sub';
+      subEl.textContent = `${part.pages} pages · ${formatSize(part.size)}`;
+      meta.appendChild(nameEl);
+      meta.appendChild(subEl);
+
+      if (!part.hasText){
+        const warnEl = document.createElement('div');
+        warnEl.className = 'warn';
+        warnEl.textContent = part.textError
+          ? "Extraction du texte impossible pour cette partie."
+          : "Aucun texte détecté (PDF scanné/image ?).";
+        meta.appendChild(warnEl);
+      }
+
+      const dlRow = document.createElement('div');
+      dlRow.className = 'dl-row';
+
+      const pdfLink = document.createElement('a');
+      pdfLink.className = 'download-link';
+      pdfLink.href = part.url;
+      pdfLink.download = part.name;
+      pdfLink.textContent = 'PDF';
+
+      const txtLink = document.createElement('a');
+      txtLink.className = 'download-link txt-link' + (part.hasText ? '' : ' disabled');
+      if (part.hasText){
+        txtLink.href = part.txtUrl;
+        txtLink.download = part.txtName;
+      }
+      txtLink.textContent = 'TXT';
+
+      dlRow.appendChild(pdfLink);
+      dlRow.appendChild(txtLink);
+
+      item.appendChild(meta);
+      item.appendChild(dlRow);
+
+      // Ligne "lecture à voix haute"
+      const audioRow = document.createElement('div');
+      audioRow.className = 'audio-row';
+
+      const audioBtn = document.createElement('button');
+      audioBtn.className = 'btn-audio';
+      audioBtn.textContent = '🔊 Écouter avec l\'IA (voix gratuite)';
+
+      const audioStatus = document.createElement('div');
+      audioStatus.className = 'audio-status';
+
+      const audioPlayer = document.createElement('audio');
+      audioPlayer.className = 'audio-player';
+      audioPlayer.controls = true;
+
+      const audioDownload = document.createElement('a');
+      audioDownload.className = 'download-link audio-download';
+      audioDownload.textContent = 'Télécharger le MP3';
+
+      if (!part.hasText){
+        audioBtn.disabled = true;
+        audioBtn.textContent = 'Audio indisponible (pas de texte)';
+      }
+
+      audioBtn.addEventListener('click', function(){
+        generateAudioForPart(part, {
+          button: audioBtn,
+          status: audioStatus,
+          player: audioPlayer,
+          download: audioDownload
+        });
+      });
+
+      audioRow.appendChild(audioBtn);
+      audioRow.appendChild(audioStatus);
+      audioRow.appendChild(audioPlayer);
+      audioRow.appendChild(audioDownload);
+      item.appendChild(audioRow);
+
+      partsList.appendChild(item);
+    });
+
+    resultsCard.classList.remove('hidden');
+  }
+
+  // --- Lecture à voix haute (via fonction Netlify -> voix Microsoft gratuite) ---
+
+  const voiceIdInput = document.getElementById('voiceIdInput');
+  const TTS_ENDPOINT = '/.netlify/functions/tts-free';
+  const TTS_CHARS_PER_CHUNK = 1500;
+
+  function chunkText(text, maxChars){
+    const clean = text.replace(/\s+/g, ' ').trim();
+    if (!clean) return [];
+    const sentences = clean.split(/(?<=[.!?…])\s+/);
+    const chunks = [];
+    let current = '';
+
+    function pushCurrent(){
+      if (current.trim()) chunks.push(current.trim());
+      current = '';
+    }
+
+    sentences.forEach(function(sentence){
+      if (!sentence) return;
+
+      if (sentence.length > maxChars){
+        // Phrase trop longue : découpage par mots
+        const words = sentence.split(' ');
+        let piece = '';
+        words.forEach(function(w){
+          const candidate = piece ? piece + ' ' + w : w;
+          if (candidate.length > maxChars){
+            if (piece){
+              const withCurrent = current ? current + ' ' + piece : piece;
+              if (withCurrent.length <= maxChars){
+                current = withCurrent;
+              } else {
+                pushCurrent();
+                current = piece;
+              }
+              pushCurrent();
+            }
+            piece = w;
+          } else {
+            piece = candidate;
+          }
+        });
+        if (piece){
+          const withCurrent = current ? current + ' ' + piece : piece;
+          if (withCurrent.length <= maxChars){
+            current = withCurrent;
+          } else {
+            pushCurrent();
+            current = piece;
+          }
+        }
+        return;
+      }
+
+      const candidate = current ? current + ' ' + sentence : sentence;
+      if (candidate.length <= maxChars){
+        current = candidate;
+      } else {
+        pushCurrent();
+        current = sentence;
+      }
+    });
+    pushCurrent();
+    return chunks.length ? chunks : [clean.slice(0, maxChars)];
+  }
+
+  function base64ToUint8Array(base64){
+    const binStr = atob(base64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++){
+      bytes[i] = binStr.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  async function generateAudioForPart(part, els){
+    if (!part.hasText || !part.text){
+      els.status.style.display = 'block';
+      els.status.textContent = "Aucun texte disponible pour cette partie.";
+      return;
+    }
+
+    const charCount = part.text.length;
+    const chunks = chunkText(part.text, TTS_CHARS_PER_CHUNK);
+
+    const confirmed = window.confirm(
+      `Générer l'audio pour "${part.name}" ?\n\n` +
+      `${charCount} caractères, ${chunks.length} requête(s) audio (gratuit).\n` +
+      `Cela peut prendre un moment selon la longueur.\n\n` +
+      `Continuer ?`
+    );
+    if (!confirmed) return;
+
+    els.button.disabled = true;
+    els.status.style.display = 'block';
+    els.player.style.display = 'none';
+    els.download.style.display = 'none';
+
+    try {
+      const voiceId = voiceIdInput ? voiceIdInput.value.trim() : '';
+      const audioParts = [];
+
+      for (let i = 0; i < chunks.length; i++){
+        els.status.textContent = `Génération audio… segment ${i + 1} / ${chunks.length}`;
+
+        const payload = { text: chunks[i], voice: voiceId };
+
+        const resp = await fetch(TTS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        let data = null;
+        try { data = await resp.json(); } catch (parseErr) { /* ignore */ }
+
+        if (!resp.ok){
+          const serverMsg = data && data.error
+            ? (typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error)))
+            : null;
+          if (resp.status === 404){
+            throw new Error("Fonction audio introuvable. Vérifiez que le dossier netlify/functions et package.json ont bien été déployés sur Netlify.");
+          }
+          throw new Error(serverMsg || `Erreur serveur (code ${resp.status}). Le service gratuit est peut-être temporairement indisponible, réessayez dans un instant.`);
+        }
+
+        if (!data || !data.audio_data){
+          throw new Error('Réponse audio invalide reçue du serveur.');
+        }
+
+        audioParts.push(base64ToUint8Array(data.audio_data));
+      }
+
+      const totalLen = audioParts.reduce((sum, arr) => sum + arr.length, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      audioParts.forEach(function(arr){
+        merged.set(arr, offset);
+        offset += arr.length;
+      });
+
+      const blob = new Blob([merged], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+
+      part.audioBlob = blob;
+      part.audioUrl = url;
+      part.audioName = part.name.replace(/\.pdf$/i, '.mp3');
+
+      els.status.textContent = `Audio prêt (${formatSize(blob.size)}).`;
+      els.player.src = url;
+      els.player.style.display = 'block';
+      els.download.href = url;
+      els.download.download = part.audioName;
+      els.download.style.display = 'inline-block';
+
+    } catch (err) {
+      console.error(err);
+      els.status.textContent = 'Erreur : ' + (err.message || 'génération audio impossible.');
+    } finally {
+      els.button.disabled = false;
+    }
+  }
+
+  // --- Télécharger toutes les parties (zip) ---
+  downloadAllBtn.addEventListener('click', async function(){
+    if (!generatedParts.length) return;
+    downloadAllBtn.disabled = true;
+    const originalText = downloadAllBtn.textContent;
+    downloadAllBtn.textContent = 'Préparation du zip…';
+
+    try {
+      const zip = new JSZip();
+      generatedParts.forEach(function(part){
+        zip.file(part.name, part.blob);
+        if (part.hasText && part.txtBlob){
+          zip.file(part.txtName, part.txtBlob);
+        }
+      });
+      const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      const zipUrl = URL.createObjectURL(zipBlob);
+
+      const a = document.createElement('a');
+      a.href = zipUrl;
+      a.download = `${currentBaseName}_parties.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(zipUrl), 4000);
+
+    } catch (err) {
+      console.error(err);
+      showError("Impossible de créer le fichier zip (mémoire insuffisante). Téléchargez les parties une par une.");
+    } finally {
+      downloadAllBtn.disabled = false;
+      downloadAllBtn.textContent = originalText;
+    }
+  });
+
+  // --- Tout effacer ---
+  clearBtn.addEventListener('click', function(){
+    revokePartUrls();
+    generatedParts = [];
+    partsList.innerHTML = '';
+    successBox.classList.remove('show');
+    resultsCard.classList.add('hidden');
+  });
+
+})();
+</script>
+
+</body>
+</html>
